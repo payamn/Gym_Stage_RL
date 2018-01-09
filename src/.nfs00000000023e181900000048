@@ -1,0 +1,289 @@
+#include "Map.h"
+#include "ros/ros.h"
+#include <iostream>
+#include <cmath>
+#include <limits>
+
+void Map::initMap(int width, int height, Stg::ModelPosition* robot)
+{
+    width_ = round(width / (float) MAP_LEAST_COUNT);
+    height_ = round(height / (float) MAP_LEAST_COUNT);
+    map_ = cv::Mat::zeros(height_, width_, CV_8UC1);
+    
+    robot_pose_ = robot->GetPose();
+    robot_size_ = robot->GetGeom().size;
+
+    robot_grid_size_x_ = round(robot_size_.x / (float) MAP_LEAST_COUNT);
+    robot_grid_size_y_ = round(robot_size_.y / (float) MAP_LEAST_COUNT);
+    robot_effective_size_ = (robot_grid_size_x_ + robot_grid_size_y_) / 2 * ROBOT_SCALE_FACTOR;
+
+    // since we are going to rotate the robot, with might not fit to (robot_grid_size_x, robot_grid_size_y)
+    robot_footprint_ = cv::Mat::zeros(
+        robot_grid_size_y_*2*ROBOT_SCALE_FACTOR, 
+        robot_grid_size_x_*2*ROBOT_SCALE_FACTOR, 
+        CV_8UC1
+    );
+    drawRobot();
+
+    // we'll need this over and over again
+    one_over_sqrt_2_ = 1. / sqrt(2);
+}
+
+int Map::drawRobot()
+{
+    int grid_x;
+    int grid_y;
+
+    if (convertToGridCoords(robot_pose_.x, robot_pose_.y, grid_x, grid_y)) {
+        return 1;
+    }
+
+    // to store the three vertices of the robot triangle
+    cv::Point vertices[3];
+
+    // top point
+    vertices[0] = cv::Point(
+        round(robot_footprint_.cols/2 + cos(robot_pose_.a) * robot_effective_size_),
+        round(robot_footprint_.rows/2 + sin(robot_pose_.a) * robot_effective_size_)
+    );
+
+    // The bottom points are close to the center so as to maintain a distinct orientation (an isosceles triangle)
+
+    // bottom left point
+    vertices[1] = cv::Point(
+        round(robot_footprint_.cols/2 + cos(robot_pose_.a + 2./3.*M_PI) * robot_effective_size_*one_over_sqrt_2_),
+        round(robot_footprint_.rows/2 + sin(robot_pose_.a + 2./3.*M_PI) * robot_effective_size_*one_over_sqrt_2_)
+    );
+    // bottom right point
+    vertices[2] = cv::Point(
+        round(robot_footprint_.cols/2 + cos(robot_pose_.a - 2./3.*M_PI) * robot_effective_size_*one_over_sqrt_2_),
+        round(robot_footprint_.rows/2 + sin(robot_pose_.a - 2./3.*M_PI) * robot_effective_size_*one_over_sqrt_2_)
+    );
+
+    robot_footprint_ = cv::Scalar(0);
+    cv::fillConvexPoly(
+        robot_footprint_,
+        vertices,
+        3,
+        CURRENT_ROBOT_COLOR
+    );
+
+    return 0;
+}
+
+cv::Mat Map::getMap()
+{ 
+    int grid_x;
+    int grid_y;
+
+    if (convertToGridCoords(robot_pose_.x, robot_pose_.y, grid_x, grid_y)) {
+        // no robot, return just the map
+        return map_;
+    }
+
+    cv::Mat map_with_robot = map_.clone();
+
+    for (int rows = 0; rows < robot_footprint_.rows; rows++) {
+        for (int cols = 0; cols < robot_footprint_.cols; cols++) {
+            if (robot_footprint_.at<uint8_t>(rows, cols)) {
+                int x = cols - robot_footprint_.cols/2 + grid_x;
+                int y = rows - robot_footprint_.rows/2 + grid_y;
+                if (
+                    x >= 0 &&
+                    y >= 0 &&
+                    x < map_.cols &&
+                    y < map_.rows
+                ) {
+                    map_with_robot.at<uint8_t>(y, x) = robot_footprint_.at<uint8_t>(rows, cols);
+                }
+                    
+            }
+        }
+    }
+
+    return map_with_robot; 
+}
+
+int Map::updateMap(Stg::Pose new_robot_pose, const Stg::ModelRanger::Sensor& sensor)
+{
+    if (updateRobotPose(new_robot_pose)) {
+        return 1;
+    }
+
+    if (updateLaserScan(sensor)) {
+        return 1;
+    }
+
+    return 0;
+}
+
+
+int Map::updateRobotPose(Stg::Pose new_robot_pose)
+{
+    addPointToPositionGradient();
+    
+    robot_pose_ = new_robot_pose;
+    return drawRobot();
+    
+}
+
+void Map::enforcePositionGradientDecay()
+{
+    for (
+        std::map< std::pair<int, int>, double >::iterator it = position_gradient_.begin(); 
+        it != position_gradient_.end();
+    ) {
+        if (it->second > PREVIOUS_ROBOT_TRAJECTORY_COLOR) {
+            int x = it->first.first;
+            int y = it->first.second;
+
+            it->second -= POSITION_GRADIENT_DECAY;
+            map_.at<uint8_t>(y, x) = round(it->second);
+            ++it;
+        } else {
+            // remove from gradient, they remain fix now
+            position_gradient_.erase(it++);
+        }
+    }
+
+
+}
+
+int Map::addPointToPositionGradient()
+{
+    enforcePositionGradientDecay();
+    
+    int grid_x;
+    int grid_y;
+
+    if (convertToGridCoords(robot_pose_.x, robot_pose_.y, grid_x, grid_y)) {
+        return 1;
+    }
+
+    position_gradient_.insert(
+        std::pair< std::pair<int, int>, double >(
+            std::make_pair(grid_x, grid_y), 
+            (double)CURRENT_ROBOT_COLOR - POSITION_GRADIENT_DECAY
+        )
+    );
+
+    return 0;
+}
+
+int Map::updateLaserScan(const Stg::ModelRanger::Sensor& sensor)
+{
+    // get the data
+    const std::vector<Stg::meters_t>& scan = sensor.ranges;
+  
+    uint32_t sample_count = scan.size();
+    if( sample_count < 1 )
+        return 1;
+
+    double laser_orientation = robot_pose_.a - sensor.fov/2.0;
+    double angle_increment = sensor.fov/(double)(sensor.sample_count-1);
+
+    for (uint32_t i = 0; i < sample_count; i++) {
+        // normalize the angle
+        laser_orientation = atan2(sin(laser_orientation), cos(laser_orientation));
+        
+        double laser_x, laser_y;
+        int laser_grid_x, laser_grid_y;
+
+        laser_x = robot_pose_.x +  scan[i] * cos(laser_orientation);
+        laser_y = robot_pose_.y +  scan[i] * sin(laser_orientation);
+
+        if (convertToGridCoords(laser_x, laser_y, laser_grid_x, laser_grid_y)) {
+            continue;
+        }
+
+        drawScanLine(robot_pose_.x, robot_pose_.y, laser_x, laser_y);
+
+        if ( scan[i] < (sensor.range.max - std::numeric_limits<float>::min()) ) {
+            
+            // draw obstacle of size (2.LASER_BEAM_WIDTH X 2.LASER_BEAM_WIDTH) pixels
+            for (int row_offset = -LASER_BEAM_WIDTH; row_offset <= LASER_BEAM_WIDTH; row_offset++) {
+                int y = laser_grid_y + row_offset;
+                if (y >= 0 && y < map_.rows) {
+                    for (int col_offset = -LASER_BEAM_WIDTH; col_offset <= LASER_BEAM_WIDTH; col_offset++) {
+                        int x = laser_grid_x + col_offset;
+                        if (x >= 0 && x < map_.cols) {
+                            map_.at<uint8_t>(y, x) = OBSTACLE_COLOR;
+                        }
+
+                    }
+                }
+            }
+            // setCell(
+            //     laser_x,
+            //     laser_y,
+            //     OBSTACLE_COLOR
+            // );
+        }
+
+        laser_orientation += angle_increment;
+    }
+
+    return 0;
+}
+
+int Map::setCell(double x, double y, unsigned int value)
+{
+    int grid_x;
+    int grid_y;
+
+    if (convertToGridCoords(x, y, grid_x, grid_y)) {
+        return 1;
+    }
+
+    // mat.at<uchar>(row, column)
+    map_.at<uint8_t>(grid_y, grid_x) = value;
+
+    return 0;
+}
+
+/********* Utilities ***************/
+
+/*
+ @brief convert coords from continuous world coordinate to discrete image coord
+*/
+int Map::convertToGridCoords(double x, double y, int &grid_x, int &grid_y)
+{
+    grid_x = round( x/(float) MAP_LEAST_COUNT + width_/ 2 );
+    grid_y = round( y/(float) MAP_LEAST_COUNT + height_/2 );
+
+    if (
+        grid_x < 0 ||
+        grid_y < 0 ||
+        grid_x  > width_ ||
+        grid_y > height_
+    ) {
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
+int Map::drawScanLine(double x1, double y1, double x2, double y2)
+{
+
+    int grid_x1, grid_y1, grid_x2, grid_y2;
+
+    if ( convertToGridCoords(x1, y1, grid_x1, grid_y1) ) {
+        return 1;
+    }
+
+    if ( convertToGridCoords(x2, y2, grid_x2, grid_y2) ) {
+        return 1;
+    }
+
+    cv::LineIterator it(map_, cv::Point(grid_x1, grid_y1), cv::Point(grid_x2, grid_y2));
+    
+    for(int i = 0; i < it.count; i++, ++it) {
+        if (map_.at<uint8_t>(it.pos()) < PREVIOUS_ROBOT_TRAJECTORY_COLOR) {
+            map_.at<uint8_t>(it.pos()) = EXPLORED_AREA_COLOR;
+        }
+    }
+    
+    return 0;
+
+}

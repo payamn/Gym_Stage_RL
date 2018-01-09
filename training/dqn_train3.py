@@ -1,0 +1,162 @@
+from __future__ import division
+import argparse
+
+from PIL import Image
+import numpy as np
+import gym
+
+from keras.models import Sequential
+from keras.layers import Dense, Activation, Flatten, Convolution2D, Permute
+from keras.optimizers import Adadelta
+import keras.backend as K
+
+from rl.agents.dqn import DQNAgent
+from rl.policy import LinearAnnealedPolicy, BoltzmannQPolicy, EpsGreedyQPolicy, GreedyQPolicy
+from rl.memory import SequentialMemory, EpisodeParameterMemory
+from rl.core import Processor, MultiInputProcessor
+from rl.callbacks import FileLogger, ModelIntervalCheckpoint
+from __init__ import *
+
+# class AgentAutolab(DQNAgent):
+#     def process_state_batch(self, batch):
+#         batch = [batch[0][0][0], batch[0][0][1]]
+#         if self.processor is None:
+#             return batch
+#         return self.processor.process_state_batch(batch)
+
+#     def compute_batch_q_values(self, state_batch):
+#         batch = self.process_state_batch(state_batch)
+#         # q_values = self.model.predict_on_batch(batch)
+#         batch[0] = np.expand_dims(batch[0], axis=0)
+#         batch[1] = batch[1].reshape([1, 360])
+#         q_values = self.model.predict([ batch[0],batch[1]], batch_size=1)
+        
+#         assert q_values.shape == (len(state_batch), self.nb_actions)
+#         return q_values
+
+class AutolabProcessor(MultiInputProcessor):
+    def process_state_batch(self, state_batch):
+        input_batches = [[] for x in range(self.nb_inputs)]
+        images = np.zeros( (len(state_batch), IMSIZE[0], IMSIZE[1], 3), dtype=np.float32 )
+        # laser_scans = np.zeros( (len(state_batch), 360), dtype=np.float32 )
+
+        for batch_idx in range(len(state_batch)):
+            images[batch_idx, :] = state_batch[batch_idx][0][0].reshape(tuple(list(IMSIZE)+[3]))
+            # laser_scans[batch_idx, :] = state_batch[batch_idx][0][1].reshape(360)
+
+        # input_batches[0] = images
+        # input_batches[1] = laser_scans
+        
+        input_batches = images
+        return input_batches
+
+
+        # for state in state_batch:
+        #     processed_state = [[] for x in range(self.nb_inputs)]
+        #     for observation in state:
+        #         assert len(observation) == self.nb_inputs
+        #         for o, s in zip(observation, processed_state):
+        #             s.append(o)
+        #     for idx, s in enumerate(processed_state):
+        #         input_batches[idx].append(s)
+        # return [np.array(x) for x in input_batches]
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--mode', choices=['train', 'test'], default='train')
+parser.add_argument('--env-name', type=str, default='Stage-v0')
+parser.add_argument('--weights', type=str, default=None)
+args = parser.parse_args()
+
+# Get the environment and extract the number of actions.
+env = gym.make(args.env_name)
+env.initROS()
+np.random.seed(123)
+env.seed(123)
+nb_actions = env.action_space.n
+
+# Next, we build our model. We use the same model that was described by Mnih et al. (2015).
+input_shape = list(IMSIZE)+[3]
+laserShape = [360]
+model = create_model(input_shape)
+
+print("Weights loaded")
+# model = Sequential()
+#if K.image_dim_ordering() == 'tf':
+#    # (width, height, channels)
+#    model.add(Permute((2, 3, 1), input_shape=input_shape))
+#elif K.image_dim_ordering() == 'th':
+#    # (channels, width, height)
+#    model.add(Permute((1, 2, 3), input_shape=input_shape))
+#else:
+#    raise RuntimeError('Unknown image_dim_ordering.')
+# model.add(Convolution2D(32, 8, 8, input_shape=(299, 299, 1), subsample=(4, 4)))
+# model.add(Activation('relu'))
+# model.add(Convolution2D(64, 4, 4, subsample=(2, 2)))
+# model.add(Activation('relu'))
+# model.add(Convolution2D(64, 3, 3, subsample=(1, 1)))
+# model.add(Activation('relu'))
+# model.add(Flatten())
+# model.add(Dense(512))
+# model.add(Activation('relu'))
+#AgentAutolab model.add(Dense(nb_actions))
+# model.add(Activation('linear'))
+
+print(model.summary())
+
+# Finally, we configure and compile our agent. You can use every built-in Keras optimizer and
+# even the metrics!
+memory = SequentialMemory(limit=8000, window_length=1)
+# memory = EpisodeParameterMemory(limit=500000, window_length=1)
+
+# processor = AtariProcessor()
+
+# Select a policy. We use eps-greedy action selection, which means that a random action is selected
+# with probability eps. We anneal eps from 1.0 to 0.1 over the course of 1M steps. This is done so that
+# the agent initially explores the environment (high eps) and then gradually sticks to what it knows
+# (low eps). We also set a dedicated eps value that is used during testing. Note that we set it to 0.05
+# so that the agent still performs some random actions. This ensures that the agent cannot get stuck.
+policy = LinearAnnealedPolicy(EpsGreedyQPolicy(), attr='eps', value_max=0.65, value_min=0.05, value_test=.05,
+                             nb_steps=1000000)
+# policy = GreedyQPolicy()
+
+# The trade-off between exploration and exploitation is difficult and an on-going research topic.
+# If you want, you can experiment with the parameters or use a different policy. Another popular one
+# is Boltzmann-batchstyle exploration:      
+# policy = BoltzmannQPolicy(tau=1.)
+# Feel free to give it a try!
+
+processor = AutolabProcessor(nb_inputs=1)
+
+dqn = DQNAgent(model=model, nb_actions=nb_actions, policy=policy, memory=memory, batch_size=1024,
+               processor=processor, nb_steps_warmup=1024, gamma=.99, target_model_update=10000,
+               train_interval=50, delta_clip=1.5,
+               memory_interval=1)
+dqn.compile(Adadelta(lr=.001), metrics=['mae'])
+
+if args.mode == 'train':
+    # Okay, now it's time to learn something! We capture the interrupt exception so that training
+    # can be prematurely aborted. Notice that you can the built-in Keras callbacks!
+    weights_filename = 'checkpoint/dqn_{}_weights.h5f'.format(args.env_name)
+    checkpoint_weights_filename = 'checkpoint/dqn_' + args.env_name + '_weights_{step}.h5f'
+    log_filename = 'dqn_{}_log.json'.format(args.env_name)
+    callbacks = [ModelIntervalCheckpoint(checkpoint_weights_filename, interval=5000)] #250000)]
+    callbacks += [FileLogger(log_filename, interval=1000)]
+
+    if args.weights:
+        weights_filename = args.weights
+     
+        print ("Weight:", weights_filename)
+        dqn.load_weights(weights_filename)
+    dqn.fit(env, callbacks=callbacks, nb_steps=1750000, log_interval=1000, verbose=0, action_repetition=5)
+
+    # After training is done, we save the final weights one more time.
+    dqn.save_weights(weights_filename, overwrite=True)
+
+    # Finally, evaluate our algorithm for 10 episodes.
+    dqn.test(env, nb_episodes=10, visualize=False)
+elif args.mode == 'test':
+    weights_filename = 'dqn_{}_weights.h5f'.format(args.env_name)
+    if args.weights:
+        weights_filename = args.weights
+    dqn.load_weights(weights_filename)
+    dqn.test(env, nb_episodes=10, visualize=False)
