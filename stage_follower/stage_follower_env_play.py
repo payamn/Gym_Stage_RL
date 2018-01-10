@@ -70,8 +70,10 @@ class StageEnvPlay(gym.Env):
     self.available_positions = yaml.load(yaml_file)
 
 
-  def initROS(self):
+  def initROS(self, agent_number):
     rospy.init_node('gym_node', disable_signals=True)
+    # we have mulitple agent
+    self.agent_number = agent_number
     # rospy.wait_for_service('/reset_positions')
     self.resetStage = rospy.ServiceProxy('/reset_positions', EmptySrv)
     self.resetRandomStage = rospy.ServiceProxy('/reset_random_positions', reset_position)

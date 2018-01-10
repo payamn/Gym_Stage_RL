@@ -7,7 +7,7 @@ include "map.inc"
 include "sick.inc"
 
 paused      0
-speedup     1
+speedup     1.000
 show_clock  0
 show_clock_interval 10000
 resolution  0.2
@@ -19,9 +19,9 @@ window
   size [ 1920 1056 ] # in pixels
   
 # Camera options 
-  scale 19.361            
-  center [ 2.378  -17.536 ]
-  rotate [ 0.000  360.000 ]
+  scale 21.297            
+  center [ 2.124  -0.511 ]
+  rotate [ 0.000  89.000 ]
 
 # perspective camera options
   pcam_loc [ 0.000 -4.000 2.000 ]
@@ -104,7 +104,111 @@ define agent position # pioneer2dx_base_no_sonar #fancypioneer2dx #pioneer2dx_ba
 #   ctrl "libtarget_ctrl"
 #   )
 #
+
 agent( 
-  name "RL"
-  pose [-3.096 -14.091 0.000 -56.231  ]
+  name "RL_0"
+  pose [3.391 -12.477 0.000 -56.231  ]
+
   )
+
+agent(
+  name "RL_1"
+  pose [-8.532 -7.598 0.000 -56.231  ]
+  )
+
+agent(
+  name "RL_2"
+  pose [-8.535 -14.783 0.000 -56.231  ]
+  )
+
+agent(
+  name "RL_3"
+  pose [2.661 2.029 0.000 -56.231  ]
+  )
+
+agent(
+  name "RL_4"
+  pose [-0.239 4.559 0.000 -56.231  ]
+  )
+
+agent(
+  name "RL_5"
+  pose [-9.380 7.663 0.000 -147.904  ]
+  )
+
+agent(
+  name "RL_6"
+  pose [11.282 13.502 0.000 -133.580  ]
+  )
+
+agent(
+  name "RL_7"
+  pose [0.105 9.461 0.000 -156.499  ]
+  )
+
+agent(
+  name "RL_8"
+  pose [-11.401 13.226 0.000 -136.445  ]
+  )
+
+agent(
+  name "RL_9"
+  pose [1.117 17.140 0.000 -104.932  ]
+  )
+
+agent(
+  name "RL_10"
+  pose [-3.749 16.554 0.000 -122.121  ]
+  )
+
+agent(
+  name "RL_11"
+  pose [-4.110 -1.159 0.000 -64.825  ]
+  )
+
+agent(
+  name "RL_12"
+  pose [9.736 1.906 0.000 -56.231  ]
+  )
+
+agent(
+  name "RL_13"
+  pose [5.545 7.455 0.000 -56.231  ]
+  )
+
+agent(
+  name "RL_14"
+  pose [-17.718 -5.364 0.000 -56.231  ]
+  )
+
+agent(
+  name "RL_15"
+  pose [12.833 -4.141 0.000 -56.231  ]
+  )
+
+agent(
+  name "RL_16"
+  pose [2.686 -5.410 0.000 -56.231  ]
+  )
+
+agent(
+  name "RL_17"
+  pose [16.935 5.913 0.000 -56.231  ]
+  )
+
+agent(
+  name "RL_18"
+  pose [0.395 -18.285 0.000 -56.231  ]
+  )
+
+agent(
+  name "RL_19"
+  pose [-14.459 0.830 0.000 -127.851  ]
+  )
+
+agent(
+  name "RL_20"
+  pose [-2.697 -14.924 0.000 -56.231  ]
+  )
+
+

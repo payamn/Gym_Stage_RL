@@ -12,7 +12,7 @@
 #include <geometry_msgs/TwistStamped.h>
 #include <std_srvs/Empty.h>
 #include <tf/tf.h>
-
+#include <string>
 #include <image_transport/image_transport.h>
 #include <cv_bridge/cv_bridge.h>
 #include <sensor_msgs/image_encodings.h>
@@ -29,6 +29,21 @@ static const double minfrontdistance = 1.0; // 0.6
 static const bool verbose = true;
 static const double stopdist = 0.3;
 static const int avoidduration = 10;
+
+
+#include<sstream>
+template <typename T>
+std::string to_string(T value)
+{
+  //create an output string stream
+  std::ostringstream os ;
+
+  //throw the value into the string stream
+  os << value ;
+
+  //convert the string stream into a string and return
+  return os.str() ;
+}
 
 class StepWorldGui : public WorldGui
 {
@@ -80,21 +95,21 @@ struct ModelRobot
   ModelOurPosition* pos;
   ModelRanger* laser;
   Pose resetPose;
+  ros::Publisher pub_state_;
+  ros::Publisher pub_cmd_vel_;
+
+  ros::Subscriber sub_vel_;
+  ros::ServiceServer reset_srv_;
+  ros::ServiceServer reset_random_srv_;
+
   int avoidcount, randcount;
 };
 
-ModelRobot* robot;
+ModelRobot* robots[20];
 usec_t stgSpeedTime;
 uint64_t stgUpdateCyle;
 
 ros::NodeHandle* n;
-ros::Publisher pub_state_;
-ros::Publisher pub_cmd_vel_;
-image_transport::Publisher image_pub_;
-
-ros::Subscriber sub_vel_;
-ros::ServiceServer reset_srv_;
-ros::ServiceServer reset_random_srv_;
 
 geometry_msgs::PoseStamped rosCurPose;
 sensor_msgs::LaserScan rosLaserData;
@@ -204,15 +219,15 @@ int stgLaserCB( Model* mod, ModelRobot* robot)
         twist_msg.header.stamp = now;
         twist_msg.twist.linear.x = robot->pos->GetVelocity().x;
         twist_msg.twist.angular.z = robot->pos->GetVelocity().a;
-        pub_cmd_vel_.publish(twist_msg);
+        robot->pub_cmd_vel_.publish(twist_msg);
 
-        pub_state_.publish(stage_msg);
+        robot->pub_state_.publish(stage_msg);
     }
 
     return 0;
 }
 
-void rosVelocityCB( const geometry_msgs::TwistConstPtr& vel)
+void rosVelocityCB( const geometry_msgs::TwistConstPtr& vel, ModelRobot* robot)
 {
   // ROS_WARN("Vel recieved");
   robot->pos->SetXSpeed( vel->linear.x);
@@ -226,14 +241,14 @@ void rosVelocityCB( const geometry_msgs::TwistConstPtr& vel)
   world->step();
 }
 
-bool rosResetSrvCB(std_srvs::Empty::Request& request, std_srvs::Empty::Response& response)
+bool rosResetSrvCB(std_srvs::Empty::Request& request, std_srvs::Empty::Response& response, ModelRobot* robot)
 {
   ROS_INFO("Resetting stage!");
   robot->pos->SetPose( robot->resetPose );
   return true;
 }
 
-bool rosResetRandomSrvCB(follower_rl::reset_position::Request& request, follower_rl::reset_position::Response& response)
+bool rosResetRandomSrvCB(follower_rl::reset_position::Request& request, follower_rl::reset_position::Response& response, ModelRobot* robot)
 {
   ROS_INFO("Resetting stage!");
 
@@ -271,25 +286,39 @@ int main(int argc, char **argv)
   ros::init( argc, argv, "target_controller_node");
   n = new ros::NodeHandle();
   lastSentTime = ros::Time::now();
-  pub_state_ = n->advertise<follower_rl::stage_message>("input_data", 15);
-  pub_cmd_vel_ = n->advertise<geometry_msgs::TwistStamped>("cmd_vel_stamped", 15);
+  for (int i=0 ; i<20 ; i++)
+  {
+      robots[i] = new ModelRobot;
+      ModelRobot* robot = robots[i];
+      Model* mod = world->GetModel("RL_" + to_string(i));
+      while (!mod)
+      {
+         mod = world->GetModel("RL_" + to_string(i));
+      }
+
+      robot->pos = (ModelOurPosition*) mod;
+      robot->pub_state_ = n->advertise<follower_rl::stage_message>("input_data_" + to_string(i), 15);
+      robot->pub_cmd_vel_ = n->advertise<geometry_msgs::TwistStamped>("cmd_vel_stamped_" + to_string(i), 15);
+      robot->sub_vel_ = n->subscribe<geometry_msgs::Twist>("cmd_vel_" + to_string(i), 15, boost::bind(&rosVelocityCB, _1, robot));
+      robot->reset_srv_ = n->advertiseService<std_srvs::Empty::Request, std_srvs::Empty::Response>("reset_positions_" + to_string(i), boost::bind(rosResetSrvCB, _1, _2, robot));
+      robot->reset_random_srv_ = n->advertiseService<follower_rl::reset_position::Request, follower_rl::reset_position::Response>("reset_random_positions_" + to_string(i), boost::bind(&rosResetRandomSrvCB, _1, _2, robot) );
 
 
-  sub_vel_ = n->subscribe( "cmd_vel", 15, &rosVelocityCB);
-  reset_srv_ = n->advertiseService("reset_positions", &rosResetSrvCB);
-  reset_random_srv_ = n->advertiseService("reset_random_positions", &rosResetRandomSrvCB);
-  robot = new ModelRobot;
-  Model* mod = world->GetModel("RL");
-  robot->pos = (ModelOurPosition*) mod;
-  robot->pos->AddCallback( Model::CB_UPDATE, (model_callback_t)stgPoseUpdateCB, robot);
-  robot->pos->Subscribe();
-  robot->resetPose = robot->pos->GetPose();
-  //    robot->pos->GetChild("ranger:0")->Subscribe();
-  robot->laser = (ModelRanger*)mod->GetChild("ranger:0");
-  robot->laser->AddCallback( Model::CB_UPDATE, (model_callback_t)stgLaserCB, robot);
-  robot->laser->Subscribe();
+      robot->pos->AddCallback( Model::CB_UPDATE, (model_callback_t)stgPoseUpdateCB, robot);
+      robot->pos->Subscribe();
+      robot->resetPose = robot->pos->GetPose();
+      //    robot->pos->GetChild("ranger:0")->Subscribe();
+      robot->laser = (ModelRanger*)mod->GetChild("ranger:0");
+      robot->laser->AddCallback( Model::CB_UPDATE, (model_callback_t)stgLaserCB, robot);
+      robot->laser->Subscribe();
 
-  Model *floorplan = robot->pos->GetWorld()->GetModel("blank");
+      Model *floorplan = robot->pos->GetWorld()->GetModel("blank");
+      ROS_INFO("adding node %d", i);
+
+  }
+
+
+
 
   /*boost::thread spin_thread([](void) -> void {
     while (true)
