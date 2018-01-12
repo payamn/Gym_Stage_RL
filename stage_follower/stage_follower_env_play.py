@@ -107,7 +107,7 @@ class StageEnvPlay(gym.Env):
     #   if (self.readyForNewData == True):
     #     print ("stuck in while")
     #   pass
-    sleep(0.01)
+    sleep(0.04)
     ## TODO: Reward
     reward = 00000.1
     
@@ -124,7 +124,7 @@ class StageEnvPlay(gym.Env):
       #self.pub_rew_.publish( rewd)
       self.sendTerminal = True
       self.number_of_iteration = 0
-      rospy.logwarn("collision reward")
+      # rospy.logwarn("collision reward")
 
     if self.number_of_iteration >= MAX_ITERATIONS and self.resetRandomStartingPoint():
       self.number_of_iteration = 0
@@ -136,7 +136,7 @@ class StageEnvPlay(gym.Env):
     return [self.laser_scanner, reward, self.sendTerminal, info]
 
   def _reset(self):
-    print ("reset %s"%self.is_init)
+    # print ("reset %s"%self.is_init)
     self.terminal = False
     self.sendTerminal = False
     self.readyForNewData = False
