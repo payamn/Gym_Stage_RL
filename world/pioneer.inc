@@ -13,7 +13,7 @@ define p2dxsonar sensor
   # define the range bounds [min max]
   range [0 5.0]
   # define the angular field of view in degrees
-  fov 15
+  fov 180
   # define the number of samples spread over the fov
   samples 1
 )

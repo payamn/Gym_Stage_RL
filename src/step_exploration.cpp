@@ -159,8 +159,7 @@ int stgLaserCB( Model* mod, ModelRobot* robot)
 
       collision = false;
       minFrontDist = sensor.range.max;
-      // added by sepehr for random position init:
-      //        double min_laser_val = 99;
+
       collision = false;
       for(unsigned int i = 0; i < sensor.ranges.size(); i++)
         {
@@ -202,7 +201,6 @@ int stgLaserCB( Model* mod, ModelRobot* robot)
 
 
         ros::Time now = ros::Time::now();
-        // flip the image so that that it makes physical sense
 
 
         allowNewMsg = false;
@@ -279,7 +277,7 @@ int main(int argc, char **argv)
   }
   // initialize libstage
   Stg::Init( &argc, &argv );
-  world = new StepWorldGui(800, 700, "Map exploration DeepRL");
+  world = new StepWorldGui(800, 700, "follow rl");
   world->Load( argv[1] );
   world->setPauseStatus(true);
 
