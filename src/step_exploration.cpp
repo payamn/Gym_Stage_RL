@@ -26,9 +26,9 @@ static const double cruisespeed = 0.4;
 static const double avoidspeed = 0.05;
 static const double avoidturn = 0.5;
 static const double minfrontdistance = 1.0; // 0.6
-static const bool verbose = true;
+static const bool verbose = false;
 static const double stopdist = 0.3;
-static const int avoidduration = 10;
+static const int avoidduration = 5;
 
 
 #include<sstream>
@@ -106,6 +106,8 @@ struct ModelRobot
 };
 
 ModelRobot* robots[20];
+ModelRobot* robots_w[20];
+
 usec_t stgSpeedTime;
 uint64_t stgUpdateCyle;
 
@@ -266,6 +268,137 @@ void spinThread()
     ros::spinOnce();
   }
 }
+
+
+int LaserCBWanderer( Model* mod, ModelRobot* robot)
+{
+  // get the data
+  const std::vector<meters_t>& scan = robot->laser->GetSensors()[0].ranges;
+  uint32_t sample_count = scan.size();
+  if( sample_count < 1 )
+    return 0;
+
+  bool obstruction = false;
+  bool stop = false;
+
+  // find the closest distance to the left and right and check if
+  // there's anything in front
+  double minleft = 1e6;
+  double minright = 1e6;
+
+  for (uint32_t i = 0; i < sample_count; i++)
+    {
+
+      // if( verbose ) printf( "%.3f ", scan[i] );
+
+      if( (i > (sample_count/3))
+    && (i < (sample_count - (sample_count/3)))
+    && scan[i] < minfrontdistance)
+  {
+    if( verbose ) puts( "  obstruction!" );
+    obstruction = true;
+  }
+
+      if( scan[i] < stopdist )
+  {
+    if( verbose ) puts( "  stopping!" );
+    stop = true;
+  }
+
+      if( i > sample_count/2 )
+  minleft = std::min( minleft, scan[i] );
+      else
+  minright = std::min( minright, scan[i] );
+    }
+
+  if( verbose )
+    {
+      puts( "" );
+      printf( "minleft %.3f \n", minleft );
+      printf( "minright %.3f\n ", minright );
+    }
+
+  if( obstruction || stop || (robot->avoidcount>0) )
+    {
+      if( verbose ) printf( "Avoid %d\n", robot->avoidcount );
+
+      robot->pos->SetXSpeed( stop ? 0.0 : avoidspeed );
+
+      /* once we start avoiding, select a turn direction and stick
+        with it for a few iterations */
+      if( robot->avoidcount < 1 )
+        {
+        if( verbose ) puts( "Avoid START" );
+              robot->avoidcount = random() % avoidduration + avoidduration;
+
+        if( minleft < minright  )
+          {
+            robot->pos->SetTurnSpeed( -avoidturn );
+
+            if( verbose ) printf( "turning right %.2f\n", -avoidturn );
+          }
+        else
+          {
+            robot->pos->SetTurnSpeed( +avoidturn );
+
+            if( verbose ) printf( "turning left %2f\n", +avoidturn );
+          }
+        }
+
+      robot->avoidcount--;
+    }
+    else
+    {
+      if( verbose ) puts( "Cruise" );
+
+      robot->avoidcount = 0;
+      robot->pos->SetXSpeed( cruisespeed );
+      robot->pos->SetTurnSpeed(  0 );
+
+    }
+
+    return 0;
+    }
+
+
+
+void init_robot( ModelRobot* robot, std::string r_name, std::string r_number)
+{
+    Model* mod = world->GetModel(r_name + "_" + r_number);
+    while (!mod)
+    {
+        mod = world->GetModel(r_name + "_" + r_number);
+    }
+    robot->pos = (ModelOurPosition*) mod;
+    robot->pos->AddCallback( Model::CB_UPDATE, (model_callback_t)stgPoseUpdateCB, robot);
+    robot->pos->Subscribe();
+
+    if (!r_name.compare("W"))
+    {
+        robot->laser = (ModelRanger*)mod->GetChild("ranger:0");
+        robot->laser->AddCallback( Model::CB_UPDATE, (model_callback_t)LaserCBWanderer, robot);
+        robot->laser->Subscribe();
+        Model *floorplan = robot->pos->GetWorld()->GetModel("blank");
+        ROS_INFO("adding node %s_%s", r_name, r_number);
+        return;
+    }
+
+    robot->pub_state_ = n->advertise<follower_rl::stage_message>("input_data_" + r_number, 15);
+    robot->pub_cmd_vel_ = n->advertise<geometry_msgs::TwistStamped>("cmd_vel_stamped_" + r_number, 15);
+    robot->sub_vel_ = n->subscribe<geometry_msgs::Twist>("cmd_vel_" + r_number, 15, boost::bind(&rosVelocityCB, _1, robot));
+    robot->reset_srv_ = n->advertiseService<std_srvs::Empty::Request, std_srvs::Empty::Response>("reset_positions_" + r_number, boost::bind(rosResetSrvCB, _1, _2, robot));
+    robot->reset_random_srv_ = n->advertiseService<follower_rl::reset_position::Request, follower_rl::reset_position::Response>("reset_random_positions_" + r_number, boost::bind(&rosResetRandomSrvCB, _1, _2, robot) );
+
+    robot->resetPose = robot->pos->GetPose();
+    //    robot->pos->GetChild("ranger:0")->Subscribe();
+    robot->laser = (ModelRanger*)mod->GetChild("ranger:0");
+    robot->laser->AddCallback( Model::CB_UPDATE, (model_callback_t)stgLaserCB, robot);
+    robot->laser->Subscribe();
+
+    Model *floorplan = robot->pos->GetWorld()->GetModel("blank");
+    ROS_INFO("adding node %s_%s", r_name, r_number);
+}
+
 int main(int argc, char **argv)
 {
   XInitThreads();
@@ -284,35 +417,17 @@ int main(int argc, char **argv)
   ros::init( argc, argv, "target_controller_node");
   n = new ros::NodeHandle();
   lastSentTime = ros::Time::now();
-  for (int i=0 ; i<20 ; i++)
+//  for (int i=0 ; i<19 ; i++)
+//  {
+//      robots[i] = new ModelRobot;
+//      ModelRobot* robot = robots[i];
+//      init_robot(robot, "RL", to_string(i));
+//  }
+  for (int j=0 ; j<1 ; j++)
   {
-      robots[i] = new ModelRobot;
-      ModelRobot* robot = robots[i];
-      Model* mod = world->GetModel("RL_" + to_string(i));
-      while (!mod)
-      {
-         mod = world->GetModel("RL_" + to_string(i));
-      }
-
-      robot->pos = (ModelOurPosition*) mod;
-      robot->pub_state_ = n->advertise<follower_rl::stage_message>("input_data_" + to_string(i), 15);
-      robot->pub_cmd_vel_ = n->advertise<geometry_msgs::TwistStamped>("cmd_vel_stamped_" + to_string(i), 15);
-      robot->sub_vel_ = n->subscribe<geometry_msgs::Twist>("cmd_vel_" + to_string(i), 15, boost::bind(&rosVelocityCB, _1, robot));
-      robot->reset_srv_ = n->advertiseService<std_srvs::Empty::Request, std_srvs::Empty::Response>("reset_positions_" + to_string(i), boost::bind(rosResetSrvCB, _1, _2, robot));
-      robot->reset_random_srv_ = n->advertiseService<follower_rl::reset_position::Request, follower_rl::reset_position::Response>("reset_random_positions_" + to_string(i), boost::bind(&rosResetRandomSrvCB, _1, _2, robot) );
-
-
-      robot->pos->AddCallback( Model::CB_UPDATE, (model_callback_t)stgPoseUpdateCB, robot);
-      robot->pos->Subscribe();
-      robot->resetPose = robot->pos->GetPose();
-      //    robot->pos->GetChild("ranger:0")->Subscribe();
-      robot->laser = (ModelRanger*)mod->GetChild("ranger:0");
-      robot->laser->AddCallback( Model::CB_UPDATE, (model_callback_t)stgLaserCB, robot);
-      robot->laser->Subscribe();
-
-      Model *floorplan = robot->pos->GetWorld()->GetModel("blank");
-      ROS_INFO("adding node %d", i);
-
+      robots_w[j] = new ModelRobot;
+      ModelRobot* robot = robots_w[j];
+      init_robot(robot, "W", to_string(j));
   }
 
 

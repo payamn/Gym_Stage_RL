@@ -72,7 +72,7 @@ class StageEnvPlay(gym.Env):
 
   def initROS(self, agent_number):
     print ("init ros %d"%agent_number)
-    rospy.init_node('gym_node %d'%agent_number, disable_signals=True)
+    rospy.init_node('gym_node_%d'%agent_number, disable_signals=True)
     # we have mulitple agent
     self.agent_number = agent_number
     # rospy.wait_for_service('/reset_positions')
@@ -208,8 +208,8 @@ class StageEnvPlay(gym.Env):
   def resetRandomStartingPoint(self):
     choice = random.choice(self.available_positions['positions'])
     pose = Pose()
-    pose.position.x = choice['x']
-    pose.position.y = choice['y']
+    pose.position.x = choice['x'] + (self.agent_number%4-2)*40 + 20
+    pose.position.y = choice['y'] + int(self.agent_number/4-2)*40 +20
     pose.position.z = choice['z']
     pose.orientation.w = random.uniform(-pi, pi)
 
