@@ -54,7 +54,7 @@ class StageEnvPlay(gym.Env):
 
   def __init__(self, observation_shape=([180])):
     global CLASSES_SPEED, ROSPACK
-
+    self.laser_scanner = [0 for i in range(0,180)]
     self.viewer = None
     self.action_space = spaces.Discrete(len(CLASSES_SPEED))
     self.observation_space = spaces.Box(low=0, high=255, shape=observation_shape[0])
@@ -76,15 +76,15 @@ class StageEnvPlay(gym.Env):
     # we have mulitple agent
     self.agent_number = agent_number
     # rospy.wait_for_service('/reset_positions')
-    self.resetStage = rospy.ServiceProxy('/reset_positions_' + str(agent_number), EmptySrv)
-    self.resetRandomStage = rospy.ServiceProxy('/reset_random_positions_' + str(agent_number), reset_position)
+    self.resetStage = rospy.ServiceProxy('/rl_'+ str(agent_number) +  '/reset_positions' , EmptySrv)
+    self.resetRandomStage = rospy.ServiceProxy('/rl_'+ str(agent_number) + '/reset_random_positions', reset_position)
 
     # Subscribers:
     # rospy.Subscriber(robot_name+'/map', stage_message, self.stageCB, queue_size=10)
-    rospy.Subscriber('/input_data_' + str(agent_number), stage_message, self.stageCB, queue_size=10)
+    rospy.Subscriber('/rl_'+ str(agent_number) + '/input_data', stage_message, self.stageCB, queue_size=10)
 
     # publishers:
-    self.pub_vel_ = rospy.Publisher('/cmd_vel_' + str(agent_number), Twist, queue_size = 1)
+    self.pub_vel_ = rospy.Publisher('/rl_'+ str(agent_number)+'/cmd_vel' , Twist, queue_size = 1)
     # self.pub_rew_ = rospy.Publisher('/lastreward',Float64,queue_size=10)
     self.is_init = True
     self.actionToVelDisc(0)
@@ -156,6 +156,7 @@ class StageEnvPlay(gym.Env):
     rospy.signal_shutdown("Done")
 
   def actionToVelDisc(self, action):
+
     if action < 0 or action >= self.action_space.n:
       rospy.logerr( "Invalid action %d", action)
     else:
@@ -169,6 +170,7 @@ class StageEnvPlay(gym.Env):
       self.pub_vel_.publish(msg)
  
   def stageCB(self, data):
+    print "stageCB"
     # try:
     #     cv_map = self.bridge.imgmsg_to_cv2(data.map_image, "rgb8")
     #     # cv_map = cv2.resize(cv_map, (299, 299,3), interpolation = cv2.INTER_AREA)#cv2.INTER_CUBIC)#
@@ -208,11 +210,13 @@ class StageEnvPlay(gym.Env):
   def resetRandomStartingPoint(self):
     choice = random.choice(self.available_positions['positions'])
     pose = Pose()
-    pose.position.x = choice['x'] + (self.agent_number%4-2)*40 + 20
-    pose.position.y = choice['y'] + int(self.agent_number/4-2)*40 +20
+    # pose.position.x = choice['x'] + (self.agent_number % 4 - 2) * 40 + 20
+    # pose.position.y = choice['y'] + int(self.agent_number / 4 - 2) * 40 + 20
+    pose.position.x = choice['x']
+    pose.position.y = choice['y']
     pose.position.z = choice['z']
     pose.orientation.w = random.uniform(-pi, pi)
-
+    print pose
     try:
       self.resetRandomStage(pose)
       # self.clearInternals()

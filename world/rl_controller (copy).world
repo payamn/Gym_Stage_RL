@@ -6,12 +6,12 @@ include "pioneer.inc"
 include "map.inc"
 include "sick.inc"
 
-paused      -1
-speedup     25.000
+paused      1
+speedup     1.000
 show_clock  0
 show_clock_interval 10000
 resolution  0.2
-threads   4
+threads   4 
 
 # configure the GUI window
 window
@@ -19,8 +19,8 @@ window
   size [ 1920 1176 ] # in pixels
   
 # Camera options 
-  scale 16.001
-  center [ 5.998  -10.211 ]
+  scale 66.839            
+  center [ -70.767  54.875 ]
   rotate [ 0.000  360.000 ]
 
 # perspective camera options
@@ -46,20 +46,21 @@ floorplan
 (
   name "blank"
   #size [140.000 140.000 0.800]
-  size [40.000 40.000 0.800]
+  size [160.000 160.000 0.800]
   pose [0.000 0.000 0.000 0.000]
-  bitmap "map.png"
+  bitmap "map16.png"
   # bitmap "hospital.png"
   # bitmap "rinkDQN-noLocalMinima.png"
   #bitmap "rinkDQN.png"
   obstacle_return 0
+
 )
 
-define agentW position #pioneer2dx_base_no_sonar #fancypioneer2dx #pioneer2dx_base_no_sonar
+define agentW pioneer2dx_base_no_sonar #fancypioneer2dx #pioneer2dx_base_no_sonar
 (
   drive "diff"      # Differential steering model.
   gui_nose 1                    # Draw a nose on the robot so we can see which way it points
-  obstacle_return 1             # Can hit things.
+  obstacle_return 0             # Can hit things.
   blob_return 1                 # Seen by blobfinders
   fiducial_return 1             # Seen as "1" fiducial finders
   size [ 0.300 0.300 0.300 ]
@@ -68,7 +69,8 @@ define agentW position #pioneer2dx_base_no_sonar #fancypioneer2dx #pioneer2dx_ba
   localization "gps"
   localization_origin [ 0 0 0 0 ]
   #gui_nose 0
-  laser_return 1
+  #laser_return 1
+  #obstacle_return 0
   sicklaser(
   pose [ 0.000 0.000 0.000 0.000 ]
   )
@@ -79,9 +81,9 @@ define agent position # pioneer2dx_base_no_sonar #fancypioneer2dx #pioneer2dx_ba
 (
   drive "diff"      # Differential steering model.
   gui_nose 1                    # Draw a nose on the robot so we can see which way it points
-  obstacle_return 1             # Can hit things.
+  obstacle_return 0             # Can hit things.
   ranger_return 0.500             # reflects sonar beams
-  blob_return 1                 # Seen by blobfinders
+  blob_return 1                 # Seen by blobfinders  
   fiducial_return 1             # Seen as "1" fiducial finders
   size [ 0.300 0.300 0.300 ]
 
@@ -89,11 +91,12 @@ define agent position # pioneer2dx_base_no_sonar #fancypioneer2dx #pioneer2dx_ba
   localization "gps"
   localization_origin [ 0 0 0 0 ]
   #gui_nose 0
-  laser_return 1
+  #laser_return 1
   #obstacle_return 0
   sicklaser(
-  pose [ 0.000 0.000 0.000 0.000 ]
+  pose [ 0.000 0.000 0.000 0.000 ] 
   )
+  # ctrl "librl_robot_ctrl" 
 )
 
 
@@ -128,15 +131,117 @@ define agent position # pioneer2dx_base_no_sonar #fancypioneer2dx #pioneer2dx_ba
 
 agent(
   name "RL_0"
-  pose [-0.000 -0.000 0.000 -130.337  ]
+  pose [-51.536 -76.069 0.000 -130.337  ]
 
   )
 
+agent(
+  name "RL_1"
+  pose [-22.336 -53.930 0.000 172.750  ]
+  )
+
+agent(
+  name "RL_2"
+  pose [6.100 -69.291 0.000 -44.413  ]
+  )
+
+agent(
+  name "RL_3"
+  pose [66.776 -70.015 0.000 144.129  ]
+  )
+
+agent(
+  name "RL_4"
+  pose [-69.292 -13.801 0.000 -129.292  ]
+  )
+
+agent(
+  name "RL_5"
+  pose [-18.931 -16.424 0.000 -54.626  ]
+  )
+
+agent(
+  name "RL_6"
+  pose [16.461 -7.407 0.000 -95.756  ]
+  )
+
+agent(
+  name "RL_7"
+  pose [56.056 -32.791 0.000 100.676  ]
+  )
+
+agent(
+  name "RL_8"
+  pose [-58.722 16.417 0.000 141.007  ]
+  )
+
+agent(
+  name "RL_9"
+  pose [-20.174 18.610 0.000 6.100  ]
+  )
+
+agent(
+  name "RL_10"
+  pose [29.038 28.489 0.000 89.283  ]
+  )
+
+agent(
+  name "RL_11"
+  pose [59.107 18.388 0.000 -12.438  ]
+  )
+
+agent(
+  name "RL_12"
+  pose [-73.721 60.716 0.000 -11.309  ]
+  )
+
+agent(
+  name "RL_13"
+  pose [-37.741 57.510 0.000 94.390  ]
+  )
+
+agent(
+  name "RL_14"
+  pose [13.154 54.267 0.000 -15.129  ]
+  )
+
+agent(
+  name "RL_15"
+  pose [70.064 74.102 0.000 146.290  ]
+  )
+
+agent(
+  name "RL_16"
+  pose [27.077 -42.737 0.000 -56.231  ]
+  )
+
+agent(
+  name "RL_17"
+  pose [26.749 37.448 0.000 -56.231  ]
+  )
+
+agent(
+  name "RL_18"
+  pose [26.257 -42.608 0.000 -4.665  ]
+  )
+
+agent(
+  name "RL_19"
+  pose [26.508 -42.751 0.000 -127.851  ]
+  )
 
 agentW(
   name "W_0"
-  pose [-2.283 -0.417 0.000 -11.309  ]
+  pose [-74.905 55.330 0.000 -11.309  ]
   )
 
+ agentW(
+  name "W_1"
+  pose [-68.038 59.729 0.000 -11.309  ]
+  )
+ agentW(
+  name "W_2"
+  pose [-72.721 60.716 0.000 -11.309  ]
+  )
 
 

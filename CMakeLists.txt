@@ -16,8 +16,8 @@ find_package(catkin REQUIRED COMPONENTS
   message_generation
 )
 
-find_package(OpenCV 3 REQUIRED)# PATHS ${CUSTOM_OPENCV_DIR} NO_DEFAULT_PATH)
-
+find_package(OpenCV 3 REQUIRED) # /opt/ros/kinetic/lib NO_DEFAULT_PATH)
+message(WARNING "${OpenCV_INCLUDE_DIRS}, ${OpenCV_LIBS}")
 find_package(stage REQUIRED)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall") # -std=c++11")
@@ -186,7 +186,7 @@ target_link_libraries(step_exploration
   ${catkin_LIBRARIES}
   ${STAGE_LIBRARIES}
   #${OpenCV_LIBRARIES}
-  ${OPENCV_LIB}
+  ${OpenCV_LIBS}
 )
 
 

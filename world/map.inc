@@ -18,7 +18,7 @@ define floorplan model
   fiducial_return 0
   ranger_return 0.5
 
-  obstacle_return 0
+  obstacle_return 1
 )
 
 define zone model

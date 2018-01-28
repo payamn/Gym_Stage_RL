@@ -1,0 +1,19 @@
+<launch>
+    <node pkg="follower_rl" type="step_exploration" name="step_exploration_0" args="$(find follower_rl)/world/rl_controller.world" output="screen" ns="/rl_0" />
+    <node pkg="follower_rl" type="step_exploration" name="step_exploration_1" args="$(find follower_rl)/world/rl_controller.world" ns="/rl_1" />
+    <node pkg="follower_rl" type="step_exploration" name="step_exploration_2" args="$(find follower_rl)/world/rl_controller.world" ns="/rl_2" />
+    <!--<node pkg="follower_rl" type="step_exploration" name="step_exploration_3" args="$(find follower_rl)/world/rl_controller.world" ns="/rl_3" />-->
+    <!--<node pkg="follower_rl" type="step_exploration" name="step_exploration_4" args="$(find follower_rl)/world/rl_controller.world" ns="/rl_4" />-->
+    <!--<node pkg="follower_rl" type="step_exploration" name="step_exploration_5" args="$(find follower_rl)/world/rl_controller.world" ns="/rl_5" />-->
+    <!--<node pkg="follower_rl" type="step_exploration" name="step_exploration_6" args="$(find follower_rl)/world/rl_controller.world" ns="/rl_6" />-->
+    <!--<node pkg="follower_rl" type="step_exploration" name="step_exploration_7" args="$(find follower_rl)/world/rl_controller.world" ns="/rl_7" />-->
+    <!--<node pkg="follower_rl" type="step_exploration" name="step_exploration_8" args="$(find follower_rl)/world/rl_controller.world" ns="/rl_8" />-->
+    <!--<node pkg="follower_rl" type="step_exploration" name="step_exploration_9" args="$(find follower_rl)/world/rl_controller.world" ns="/rl_9" />-->
+    <!--<node pkg="follower_rl" type="step_exploration" name="step_exploration_10" args="$(find follower_rl)/world/rl_controller.world" ns="/rl_10" />-->
+    <!--<node pkg="follower_rl" type="step_exploration" name="step_exploration_11" args="$(find follower_rl)/world/rl_controller.world" ns="/rl_11" />-->
+    <!--<node pkg="follower_rl" type="step_exploration" name="step_exploration_12" args="$(find follower_rl)/world/rl_controller.world" ns="/rl_12" />-->
+    <!--<node pkg="follower_rl" type="step_exploration" name="step_exploration_13" args="$(find follower_rl)/world/rl_controller.world" ns="/rl_13" />-->
+    <!--<node pkg="follower_rl" type="step_exploration" name="step_exploration_14" args="$(find follower_rl)/world/rl_controller.world" ns="/rl_14" />-->
+    <!--<node pkg="follower_rl" type="step_exploration" name="step_exploration_15" args="$(find follower_rl)/world/rl_controller.world" ns="/rl_15" />-->
+    <!--<node pkg="follower_rl" type="step_exploration" name="step_exploration_16" args="$(find follower_rl)/world/rl_controller.world" ns="/rl_16" />-->
+</launch>
