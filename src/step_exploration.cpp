@@ -5,8 +5,9 @@
 #include <stage.hh>
 #include "ros/ros.h"
 #include <ros/package.h>
+#include <image_transport/image_transport.h>
 
-
+#include <nav_msgs/OccupancyGrid.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <sensor_msgs/LaserScan.h>
 #include <follower_rl/stage_message.h>
@@ -36,7 +37,7 @@ static const double minfrontdistance = 1.0; // 0.6
 static const bool verbose = true;
 static const double stopdist = 0.3;
 static const int avoidduration = 5;
-
+static const Point World_Size = Point(40,40);
 
 #include<sstream>
 template <typename T>
@@ -106,7 +107,9 @@ struct ModelRobot
   Pose resetPose;
   ros::Publisher pub_state_;
   ros::Publisher pub_cmd_vel_;
-
+  image_transport::Publisher map_image_pub_;
+  Mat map;   
+  Mat visual_pos;
   ros::Subscriber sub_vel_;
   ros::ServiceServer reset_srv_;
   ros::ServiceServer reset_random_srv_;
@@ -146,6 +149,19 @@ int stgPoseUpdateCB( Model* mod, ModelRobot* robot)
 
   if (robot->pos->GetWorld()->UpdateCount() - stgUpdateCyle > 1) // 100000)
 	  robot->pos->SetSpeed( 0, 0, 0);
+  nav_msgs::OccupancyGrid map_occupancy_grid_;
+  robot->visual_pos = robot->map.clone();
+  Point center = Point
+  	(
+  	  (robot->pos->GetPose().x + World_Size.x/2) * ( robot->map.cols/World_Size.x), 
+  	  (-robot->pos->GetPose().y + World_Size.y/2) * ( robot->map.rows/World_Size.y)
+  	);
+  circle(robot->visual_pos, center, 3, (255, 0, 0), 1, 8);
+  cv_bridge::CvImage cv_ptr;
+  cv_ptr.image = robot->visual_pos;
+  cv_ptr.encoding = "mono8";
+  cv_ptr.header = map_occupancy_grid_.header;
+  robot->map_image_pub_.publish(cv_ptr.toImageMsg()); 
 
   ros::spinOnce();
   return 0;
@@ -200,9 +216,8 @@ int stgLaserCB( Model* mod, ModelRobot* robot)
   // if( allowNewMsg
   //     && laserMsgs.header.stamp > lastSentTime
   //     && rosCurPose.header.stamp > lastSentTime)
-
-//      if (robot->pos->GetVelocity().a > 0.01 ||
-//          robot->pos->GetVelocity().a <-0.01)
+  //      if (robot->pos->GetVelocity().a > 0.01 ||
+  //          robot->pos->GetVelocity().a <-0.01)
 	  {
 		collision = collision || robot->pos->TestCollision();
 		if (collision)
@@ -395,7 +410,10 @@ void init_robot( ModelRobot* robot, std::string r_name, std::string r_number)
 		ROS_INFO("adding cpu node %s_%s", r_name.c_str(), r_number.c_str());
 		return ;
 	}
-
+	std::string path = ros::package::getPath("follower_rl");
+	robot->map = imread(path+"/world/map.png", cv::IMREAD_GRAYSCALE);
+	image_transport::ImageTransport image_transport_(*n);
+	robot->map_image_pub_ = image_transport_.advertise("map_image", 1);
 	robot->pub_state_ = n->advertise<follower_rl::stage_message>("input_data", 15);
 	robot->pub_cmd_vel_ = n->advertise<geometry_msgs::TwistStamped>("cmd_vel_stamped", 15);
 	robot->sub_vel_ = n->subscribe<geometry_msgs::Twist>("cmd_vel", 15, boost::bind(&rosVelocityCB, _1, robot));
@@ -423,22 +441,16 @@ int main(int argc, char **argv)
   }
     namedWindow( "show", WINDOW_AUTOSIZE );
 
-    std::string path = ros::package::getPath("follower_rl");
-    Mat image;
-    image = imread(path+"/world/map.png", cv::IMREAD_GRAYSCALE);
-    ROS_INFO("map width %d height %d", image.rows, image.cols);
-    cv::bitwise_not ( image, image );
-    while (true){
-     imshow( "show", image  );
-          cv::waitKey(0);
-
-    }
-     namedWindow( "show", WINDOW_AUTOSIZE );
-     imshow( "show", image  );
-//    cv::subtract(cv::Scalar:all(255),image,image);
-    std::cout <<  "M = "<< std::endl << " "  << image << std::endl << std::endl;
-     exit(0);
-  // initialize libstage
+    // ROS_INFO("map width %d height %d", image.rows, image.cols);
+    // cv::bitwise_not(image, image);
+    // while (true){
+    // imshow("show", image);
+    //     cv::waitKey(0);
+    // }
+//      namedWindow( "show", WINDOW_AUTOSIZE );
+//      imshow( "show", image  );
+//  // cv::subtract(cv::Scalar:all(255),image,image);
+   // initialize libstage
   Stg::Init( &argc, &argv );
   world = new StepWorldGui(800, 700, "follow rl");
   world->Load( argv[1] );
