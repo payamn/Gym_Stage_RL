@@ -1,6 +1,7 @@
 
 #include <boost/thread/thread.hpp>
 #include <X11/Xlib.h>
+#include <iostream>
 
 #include <stage.hh>
 #include "ros/ros.h"
@@ -34,7 +35,7 @@ static const double cruisespeed = 0.4;
 static const double avoidspeed = 0.05;
 static const double avoidturn = 0.5;
 static const double minfrontdistance = 1.0; // 0.6
-static const bool verbose = true;
+static const bool verbose = false;
 static const double stopdist = 0.3;
 static const int avoidduration = 5;
 static const Point World_Size = Point(40,40);
@@ -135,8 +136,38 @@ ros::Time lastSentTime;
 
 StepWorldGui *world;
 
+bool check_obstacle (Point start, Point end ,ModelRobot* robot)
+{
+    cv::LineIterator line_iterator(robot->visual_pos, start, end);
+    cv::LineIterator it = line_iterator;
+    bool is_obstacle = false;
+    for(int j = 0; j < line_iterator.count; j++, ++it)
+    {
+    // circle(robot->visual_pos, it.pos(), 5, (255, 255, 0), 1, 8);
+
+        if (robot->visual_pos.at<uint8_t>(it.pos()) == 0)
+        {
+          // there is an obstacle
+          is_obstacle = true;
+          break;
+        }
+    }
+    if (!is_obstacle)
+    {
+        return false;
+    }
+    return true;
+}
+
+
 int stgPoseUpdateCB( Model* mod, ModelRobot* robot)
 {
+      cv_bridge::CvImage cv_ptr;
+    cv_ptr.image = robot->visual_pos;
+    cv_ptr.encoding = "mono8";
+    cv_ptr.header = map_occupancy_grid_.header;
+    robot->map_image_pub_.publish(cv_ptr.toImageMsg());
+    
   geometry_msgs::PoseStamped positionMsg;
   positionMsg.pose.position.x = robot->pos->GetPose().x;
   positionMsg.pose.position.y = robot->pos->GetPose().y;
@@ -149,19 +180,6 @@ int stgPoseUpdateCB( Model* mod, ModelRobot* robot)
 
   if (robot->pos->GetWorld()->UpdateCount() - stgUpdateCyle > 1) // 100000)
 	  robot->pos->SetSpeed( 0, 0, 0);
-  nav_msgs::OccupancyGrid map_occupancy_grid_;
-  robot->visual_pos = robot->map.clone();
-  Point center = Point
-  	(
-  	  (robot->pos->GetPose().x + World_Size.x/2) * ( robot->map.cols/World_Size.x), 
-  	  (-robot->pos->GetPose().y + World_Size.y/2) * ( robot->map.rows/World_Size.y)
-  	);
-  circle(robot->visual_pos, center, 3, (255, 0, 0), 1, 8);
-  cv_bridge::CvImage cv_ptr;
-  cv_ptr.image = robot->visual_pos;
-  cv_ptr.encoding = "mono8";
-  cv_ptr.header = map_occupancy_grid_.header;
-  robot->map_image_pub_.publish(cv_ptr.toImageMsg()); 
 
   ros::spinOnce();
   return 0;
@@ -410,6 +428,7 @@ void init_robot( ModelRobot* robot, std::string r_name, std::string r_number)
 		ROS_INFO("adding cpu node %s_%s", r_name.c_str(), r_number.c_str());
 		return ;
 	}
+
 	std::string path = ros::package::getPath("follower_rl");
 	robot->map = imread(path+"/world/map.png", cv::IMREAD_GRAYSCALE);
 	image_transport::ImageTransport image_transport_(*n);
@@ -425,6 +444,46 @@ void init_robot( ModelRobot* robot, std::string r_name, std::string r_number)
 	robot->laser = (ModelRanger*)mod->GetChild("ranger:0");
 	robot->laser->AddCallback( Model::CB_UPDATE, (model_callback_t)stgLaserCB, robot);
 	robot->laser->Subscribe();
+
+	  nav_msgs::OccupancyGrid map_occupancy_grid_;
+  robot->visual_pos = robot->map.clone();
+  Point center = Point
+  	(
+  	  (robot->pos->GetPose().x + World_Size.x/2) * ( robot->map.cols/World_Size.x),
+  	  (-robot->pos->GetPose().y + World_Size.y/2) * ( robot->map.rows/World_Size.y)
+  	);
+//  ROS_WARN("center: %d %d ", center.x, center.y);
+  cv::Size axes(50, 50);
+  std::vector<Point> circle_points;
+  ellipse2Poly(center, axes, 0, 0, 360, 1, circle_points);
+  int wait_for_stable_point = 10;
+   std::vector<Point> stable_points;
+  for(int i = 0; i < circle_points.size(); i++){
+//       ROS_WARN("center: %d %d size: %d", circle_points[i].x, circle_points[i].y,circle_points.size());
+        if (check_obstacle (center, circle_points[i], robot) == false)
+        {
+            cv::Size ax(25, 25);
+            std::vector<Point> circle_around_stable_points;
+            ellipse2Poly(circle_points[i], ax, 0, 0, 360, 1, circle_around_stable_points);
+            bool is_stable = true;
+            for(int j = 0; j < circle_around_stable_points.size(); j++)
+            {
+               ROS_WARN("center: %d %d to %d %d ", circle_points[i].x, circle_points[i].y,circle_around_stable_points[j].x, circle_around_stable_points[j].y);
+
+                if (robot->visual_pos.at<uint8_t>(circle_points[i]) == 0)
+                    is_stable = false;
+            }
+            if (is_stable==true)
+            {
+                circle(robot->visual_pos, circle_points[i], 2, (255, 0, 0), 1, 8);
+                stable_points.push_back(circle_points[i]);
+            }
+        }
+    }
+    circle(robot->visual_pos, center, 4, (255, 0, 0), 1, 8);
+
+
+
 
 	Model *floorplan = robot->pos->GetWorld()->GetModel("blank");
 	ROS_INFO("adding node %s_%s", r_name.c_str(), r_number.c_str());
