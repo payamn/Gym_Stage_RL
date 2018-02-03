@@ -6,8 +6,8 @@ include "pioneer.inc"
 include "map.inc"
 include "sick.inc"
 
-paused      -1
-speedup     25.000
+paused      1
+speedup     20.000
 show_clock  0
 show_clock_interval 10000
 resolution  0.2
@@ -19,9 +19,9 @@ window
   size [ 1920 1176 ] # in pixels
   
 # Camera options 
-  scale 16.001
-  center [ 5.998  -10.211 ]
-  rotate [ 0.000  360.000 ]
+  scale 31.181
+  center [ 11.327  2.186 ]
+  rotate [ 0.000  0.000 ]
 
 # perspective camera options
   pcam_loc [ 0.000 -4.000 2.000 ]
@@ -52,7 +52,7 @@ floorplan
   # bitmap "hospital.png"
   # bitmap "rinkDQN-noLocalMinima.png"
   #bitmap "rinkDQN.png"
-  obstacle_return 0
+  obstacle_return 1
 )
 
 define agentW position #pioneer2dx_base_no_sonar #fancypioneer2dx #pioneer2dx_base_no_sonar
@@ -64,7 +64,7 @@ define agentW position #pioneer2dx_base_no_sonar #fancypioneer2dx #pioneer2dx_ba
   fiducial_return 1             # Seen as "1" fiducial finders
   size [ 0.300 0.300 0.300 ]
 
-  color "random"
+  color "red"
   localization "gps"
   localization_origin [ 0 0 0 0 ]
   #gui_nose 0
@@ -73,6 +73,7 @@ define agentW position #pioneer2dx_base_no_sonar #fancypioneer2dx #pioneer2dx_ba
   pose [ 0.000 0.000 0.000 0.000 ]
   )
 )
+
 
 
 define agent position # pioneer2dx_base_no_sonar #fancypioneer2dx #pioneer2dx_base_no_sonar
@@ -85,12 +86,24 @@ define agent position # pioneer2dx_base_no_sonar #fancypioneer2dx #pioneer2dx_ba
   fiducial_return 1             # Seen as "1" fiducial finders
   size [ 0.300 0.300 0.300 ]
 
+  blobfinder(
+      pose [0.000 0.000 0.000 180.000]
+      colors_count 6
+      name "blob"
+      colors [ "red" "blue" "green" "cyan" "yellow" "magenta" ]
+      alwayson 1
+      update_interval 1
+      fov 180
+      range 30.0
+      image [ 640 640 ]
+      pan 0
+    )
+
   color "random"
   localization "gps"
   localization_origin [ 0 0 0 0 ]
   #gui_nose 0
   laser_return 1
-  #obstacle_return 0
   sicklaser(
   pose [ 0.000 0.000 0.000 0.000 ]
   )
@@ -128,14 +141,14 @@ define agent position # pioneer2dx_base_no_sonar #fancypioneer2dx #pioneer2dx_ba
 
 agent(
   name "RL_0"
-  pose [-0.000 -0.000 0.000 -130.337  ]
+  pose [3.168 15.408 0.000 -130.337  ]
 
   )
 
 
 agentW(
   name "W_0"
-  pose [-2.283 -0.417 0.000 -11.309  ]
+  pose [4.099 8.373 0.000 20.804  ]
   )
 
 

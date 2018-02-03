@@ -27,11 +27,12 @@ from math import pi,sqrt
 import random
 from collections import deque
 
-MAX_ITERATIONS = 20000
+MAX_ITERATIONS = 2000
 
 REWARD_QUEUE_LEN = 100
 MINIMUM_EXPLORATION_OVER_QUEUE = 200
 
+D_RANGE = 2
 
 COLLISION_REWARD = -1
 
@@ -52,19 +53,21 @@ ROSPACK = rospkg.RosPack()
 class StageEnvPlay(gym.Env):
   metadata = {'render.modes': ['human']}
 
-  def __init__(self, observation_shape=([180])):
+  def __init__(self, observation_shape=([185])):
     global CLASSES_SPEED, ROSPACK
     self.laser_scanner = [0 for i in range(0,180)]
+    self.blob = [-1 for i in range(0,5)]
     self.viewer = None
     self.action_space = spaces.Discrete(len(CLASSES_SPEED))
     self.observation_space = spaces.Box(low=0, high=255, shape=observation_shape[0])
-    self.terminal = False
+    self.terminal = 0
     self.sendTerminal = False
-    self.readyForNewData = True
+    self.readyForNewData = 1
     self.minFrontDist = 3
     self.bridge = CvBridge()
     self.is_init = False
     self.number_of_iteration = 0
+    self.dist = -1
 
     yaml_file = open(ROSPACK.get_path('follower_rl') + "/positions.yaml", "r")
     self.available_positions = yaml.load(yaml_file)
@@ -95,58 +98,80 @@ class StageEnvPlay(gym.Env):
     while (self.is_init == False):
       print ("stuck in step")
       sleep(0.01)
-    if self.terminal == False:
-      # self.actionToVel( action[0], action[1])
-      self.actionToVelDisc(action)
-      self.readyForNewData = True
+
 
     # Add whatever info you want
     wait_from = rospy.get_rostime()
-    # while (self.readyForNewData == True):
-    #   sleep(0.01)
-    #   if (self.readyForNewData == True):
-    #     print ("stuck in while")
-    #   pass
-    sleep(0.04)
-    ## TODO: Reward
-    reward = 00000.1
-    
-    # rospy.loginfo('Before Reward: %f', reward)
+    counter = 0
+    while (self.readyForNewData < 1 and counter < 2):
+      sleep(0.04)
+      if (self.readyForNewData < 1):
+        counter += 1
+        print ("stuck in while")
+      pass
+    # sleep(0.04)
 
-    # make the robot moving (so that it's not stuck in the corners)
+    if self.terminal == 0:
+      # self.actionToVel( action[0], action[1])
+      self.actionToVelDisc(action)
+      if  self.readyForNewData >= 1:
+        self.readyForNewData -= 1
 
-    # TODO: info
-    info = {"laser":self.laser_scanner}
-    if self.terminal == True:
-      reward = COLLISION_REWARD
-      #rewd = Float64()
-      #rewd.data = self.ep_reward
-      #self.pub_rew_.publish( rewd)
+    self.number_of_iteration = self.number_of_iteration + 1
+    # reward calculation
+    if self.blob[0] < 1.1 * D_RANGE and self.blob[0]  > D_RANGE * 0.9:
+      reward = 00000.1
+    elif self.dist > D_RANGE * 3:
+      reward = -(abs(D_RANGE - self.dist) / (D_RANGE * 30))
+      self.terminal = 2
       self.sendTerminal = True
       self.number_of_iteration = 0
-      # rospy.logwarn("collision reward")
+      if self.agent_number == 0:
+        rospy.logwarn("End of episode too far")
+    elif self.blob[0] == -1:
+      reward = -0.1
+    elif self.terminal == 0:
+      reward = -(abs(D_RANGE - self.blob[0]) /  (D_RANGE * 30))
+    else:
+      rospy.logerr("Something wrong in reward")
 
-    if self.number_of_iteration >= MAX_ITERATIONS and self.resetRandomStartingPoint():
+    if self.terminal == 1:
+      reward = COLLISION_REWARD
+      # rewd = Float64()
+      # rewd.data = self.ep_reward
+      # self.pub_rew_.publish( rewd)
+      self.sendTerminal = True
       self.number_of_iteration = 0
-      rospy.loginfo("End of episode")
-    self.number_of_iteration = self.number_of_iteration + 1
+      if self.agent_number == 0:
+        rospy.logwarn("End of episode collision reward")
+    if self.agent_number == 0:
+      print reward, self.blob
+    if self.number_of_iteration >= MAX_ITERATIONS:
+      self.sendTerminal = True
+      self.number_of_iteration = 0
+      if self.agent_number == 0:
+        rospy.loginfo("End of episode")
+    info = {"laser":self.laser_scanner, "blob":self.blob}
+
+
+
 
     # rospy.loginfo('Final Reward: %f', reward)
 
-    return [self.laser_scanner, reward, self.sendTerminal, info]
+    return [    np.concatenate((self.blob, self.laser_scanner), axis=0), reward, self.sendTerminal, info]
 
   def _reset(self):
     # print ("reset %s"%self.is_init)
     self.terminal = False
     self.sendTerminal = False
-    self.readyForNewData = False
+    self.readyForNewData = 1
 
     if self.is_init:
       self.resetRandomStartingPoint()
       self.actionToVelDisc(0)
     # todo laser scanner fix
 
-    return [0 for i in range(0,180)]
+    return [0 for i in range(0,185)]
 
   def _render(self, mode='human', close=False):
     pass
@@ -168,9 +193,8 @@ class StageEnvPlay(gym.Env):
       msg.linear.y = 0
       msg.linear.z = 0
       self.pub_vel_.publish(msg)
- 
+
   def stageCB(self, data):
-    print "stageCB"
     # try:
     #     cv_map = self.bridge.imgmsg_to_cv2(data.map_image, "rgb8")
     #     # cv_map = cv2.resize(cv_map, (299, 299,3), interpolation = cv2.INTER_AREA)#cv2.INTER_CUBIC)#
@@ -188,6 +212,24 @@ class StageEnvPlay(gym.Env):
     laser_scanner = laser_scanner / float(data.laser.range_max)
     laser_scanner = laser_scanner.reshape(180)
     self.laser_scanner = laser_scanner
+    pos_rl_agent =  np.asarray\
+        (
+        [data.position.pose.position.x,
+         data.position.pose.position.y,
+         data.position.pose.position.z],
+        dtype=np.float32
+      )
+    pos_human = np.asarray\
+        (
+        [data.target.pose.position.x,
+         data.target.pose.position.y,
+         data.target.pose.position.z],
+      dtype=np.float32
+      )
+    dist = np.linalg.norm(pos_rl_agent-pos_human)
+    self.dist = dist
+    blob =  [data.range, data.top,  data.bottom, data.left, data.right]
+    self.blob =  np.asarray(blob, dtype=np.float32)
     #
     #
     #
@@ -198,12 +240,11 @@ class StageEnvPlay(gym.Env):
 
     # data = np.concatenate(self.map, self.laser_scanner)
     # print (data.shape)
-
     if data.collision == True:
-      self.terminal = 1 
+      self.terminal = 1
     self.minFrontDist = data.minFrontDist
 
-    self.readyForNewData = False
+    self.readyForNewData += 1
 
 
 
@@ -216,7 +257,7 @@ class StageEnvPlay(gym.Env):
     pose.position.y = choice['y']
     pose.position.z = choice['z']
     pose.orientation.w = random.uniform(-pi, pi)
-    print pose
+    # print pose
     try:
       self.resetRandomStage(pose)
       # self.clearInternals()
