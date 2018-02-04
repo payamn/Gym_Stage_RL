@@ -315,8 +315,8 @@ void rosVelocityCB( const geometry_msgs::TwistConstPtr& vel, ModelRobot* robot)
   allowNewMsg = true;
 
 //  ROS_INFO("Stepping the world");
-	if (r_name.compare("W"))
-  	world->step();
+	if (robot->name.compare("W"))
+  		world->step();
 }
 
 bool rosResetSrvCB(std_srvs::Empty::Request& request, std_srvs::Empty::Response& response, ModelRobot* robot)

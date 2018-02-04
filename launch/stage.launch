@@ -1,5 +1,5 @@
 <launch>
-    <node pkg="follower_rl" type="step_exploration" name="step_exploration_0" args="$(find follower_rl)/world/rl_controller.world gui" output="screen" ns="/rl_0" />
+    <node pkg="follower_rl" type="step_exploration" name="step_exploration_0" args="$(find follower_rl)/world/rl_controller.world gui "     launch-prefix="xterm -e gdb --args" output="screen" ns="/rl_0" />
     <node pkg="follower_rl" type="step_exploration" name="step_exploration_1" args="$(find follower_rl)/world/rl_controller.world" ns="/rl_1" />
     <node pkg="follower_rl" type="step_exploration" name="step_exploration_2" args="$(find follower_rl)/world/rl_controller.world" ns="/rl_2" />
     <node pkg="follower_rl" type="step_exploration" name="step_exploration_3" args="$(find follower_rl)/world/rl_controller.world" ns="/rl_3" />

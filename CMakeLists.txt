@@ -18,7 +18,7 @@ find_package(catkin REQUIRED COMPONENTS
 
 find_package(OpenCV 3 REQUIRED) # /opt/ros/kinetic/lib NO_DEFAULT_PATH)
 message(WARNING "${OpenCV_INCLUDE_DIRS}, ${OpenCV_LIBS}")
-find_package(stage 4.3 REQUIRED)
+find_package(stage REQUIRED)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall") # -std=c++11")
 
