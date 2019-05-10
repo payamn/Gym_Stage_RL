@@ -15,7 +15,8 @@ from std_msgs.msg import Float64
 from std_srvs.srv import Empty as EmptySrv
 from follower_rl.msg import stage_message
 from follower_rl.srv import reset_position
-from tf import transformations
+from follower_rl.srv import agent_num
+
 from cv_bridge import CvBridge, CvBridgeError
 from time import sleep
 import cv2
@@ -36,9 +37,9 @@ D_RANGE = 2
 
 COLLISION_REWARD = -1
 
-CRUISE_SPEED = 0.4
+CRUISE_SPEED = 1.2
 AVOID_SPEED = 0.05
-AVOID_TURN = 0.5
+AVOID_TURN = 0.8
 CLASSES_SPEED = [
     [CRUISE_SPEED, 0.0],  # class 0
     [AVOID_SPEED, +AVOID_TURN],  # class 1
@@ -71,9 +72,19 @@ class StageEnvPlay(gym.Env):
 
     yaml_file = open(ROSPACK.get_path('follower_rl') + "/positions.yaml", "r")
     self.available_positions = yaml.load(yaml_file)
+    rospy.logwarn("before ros init")
+    self.initROS()
 
+  def initROS(self):
+    self.agent_num_service = rospy.ServiceProxy('/agent_num', agent_num)
+    try:
+      agent_number = self.agent_num_service().num
+      # self.clearInternals()
+      rospy.logwarn("agent number%d"%agent_number)
+    except rospy.service.ServiceException:
+      rospy.logerr("coulnot get agent number")
+      return 1
 
-  def initROS(self, agent_number):
     print ("init ros %d"%agent_number)
     rospy.init_node('gym_node_%d'%agent_number, disable_signals=True)
     # we have mulitple agent
@@ -107,8 +118,9 @@ class StageEnvPlay(gym.Env):
       sleep(0.04)
       if (self.readyForNewData < 1):
         counter += 1
-        print ("stuck in while")
-      pass
+        # print ("stuck in while")
+
+    # print ("after stuck")
     # sleep(0.04)
 
     if self.terminal == 0:
@@ -133,7 +145,8 @@ class StageEnvPlay(gym.Env):
     elif self.terminal == 0:
       reward = -(abs(D_RANGE - self.blob[0]) /  (D_RANGE * 30))
     else:
-      rospy.logerr("Something wrong in reward")
+      if self.terminal != 1:
+        rospy.logerr("Something wrong in reward")
 
     if self.terminal == 1:
       reward = COLLISION_REWARD
@@ -144,13 +157,13 @@ class StageEnvPlay(gym.Env):
       self.number_of_iteration = 0
       if self.agent_number == 0:
         rospy.logwarn("End of episode collision reward")
-    if self.agent_number == 0:
-      print reward, self.blob
+    # if self.agent_number == 0:
+    #   print reward, self.blob
     if self.number_of_iteration >= MAX_ITERATIONS:
       self.sendTerminal = True
       self.number_of_iteration = 0
-      if self.agent_number == 0:
-        rospy.loginfo("End of episode")
+      # if self.agent_number == 0:
+      #   rospy.loginfo("End of episode")
     info = {"laser":self.laser_scanner, "blob":self.blob}
 
 

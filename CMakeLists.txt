@@ -17,8 +17,8 @@ find_package(catkin REQUIRED COMPONENTS
 )
 
 find_package(OpenCV 3 REQUIRED) # /opt/ros/kinetic/lib NO_DEFAULT_PATH)
-message(WARNING "${OpenCV_INCLUDE_DIRS}, ${OpenCV_LIBS}")
-find_package(stage REQUIRED)
+#message(WARNING "${OpenCV_INCLUDE_DIRS}, ${OpenCV_LIBS}")
+find_package(stage 4.3 REQUIRED)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall") # -std=c++11")
 
@@ -67,6 +67,7 @@ add_message_files(
 add_service_files(
   FILES
    reset_position.srv
+   agent_num.srv
 #   Service2.srv
 )
 
@@ -150,6 +151,11 @@ include_directories(
    src/step_exploration.cpp
  )
 
+  add_executable(manager
+   src/manager.cpp
+ )
+
+
 
 
 # add_library(multi_target_ctrl
@@ -168,6 +174,7 @@ include_directories(
 add_dependencies(wanderer_ctrl ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 add_dependencies(rl_robot_ctrl ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 add_dependencies(step_exploration ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+add_dependencies(manager ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 #add_dependencies(multi_robot_ctrl ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
@@ -189,7 +196,12 @@ target_link_libraries(step_exploration
   ${OpenCV_LIBS}
 )
 
-
+target_link_libraries(manager
+  ${catkin_LIBRARIES}
+  #${STAGE_LIBRARIES}
+  #${OpenCV_LIBRARIES}
+  #${OpenCV_LIBS}
+)
 
 #############
 ## Install ##

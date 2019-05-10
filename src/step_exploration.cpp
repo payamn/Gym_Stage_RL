@@ -41,7 +41,13 @@ static const int avoidduration = 5;
 static const Point World_Size = Point(40,40);
 
 #include<sstream>
+
+#include <exception>
+
+
+
 template <typename T>
+
 std::string to_string(T value)
 {
   //create an output string stream
@@ -314,23 +320,29 @@ void rosVelocityCB( const geometry_msgs::TwistConstPtr& vel, ModelRobot* robot)
   stgUpdateCyle = robot->pos->GetWorld()->UpdateCount();
   allowNewMsg = true;
 
-//  ROS_INFO("Stepping the world");
+//  ROS_INFO("robot name: %s", robot->name.c_str());
 	if (robot->name.compare("W"))
   		world->step();
 }
 
 bool rosResetSrvCB(std_srvs::Empty::Request& request, std_srvs::Empty::Response& response, ModelRobot* robot)
 {
-  ROS_INFO("Resetting stage!");
+//  ROS_INFO("Resetting stage!");
   robot->pos->SetPose( robot->resetPose );
-  set_other_robot_pose(robot);
-
+	try
+		{
+			set_other_robot_pose(robot);
+		}
+		catch (std::runtime_error& e)
+		{
+			ROS_ERROR("couldnt set the other robot pose");
+		}
   return true;
 }
 
 bool rosResetRandomSrvCB(follower_rl::reset_position::Request& request, follower_rl::reset_position::Response& response, ModelRobot* robot)
 {
-  ROS_INFO("Resetting stage!");
+//  ROS_INFO("Resetting stage!");
 
   Pose pose;
   pose.x = request.position.position.x;
@@ -338,7 +350,15 @@ bool rosResetRandomSrvCB(follower_rl::reset_position::Request& request, follower
   pose.z = 0;
   pose.a = request.position.orientation.w;
   robot->pos->SetPose(pose);
-  pose.a = set_other_robot_pose(robot);
+
+  try
+	{
+  	  pose.a = set_other_robot_pose(robot);
+	}
+	catch (std::runtime_error& e)
+	{
+		ROS_ERROR("couldnt set the other robot pose");
+	}
   robot->pos->SetPose(pose);
 
   return true;
@@ -511,8 +531,15 @@ float set_other_robot_pose( ModelRobot* robot)
             for(int j = 0; j < circle_around_stable_points.size(); j++)
             {
 //          ROS_WARN("center: %d %d to %d %d ", circle_points[i].x, circle_points[i].y,circle_around_stable_points[j].x, circle_around_stable_points[j].y);
-                if (robot->visual_pos.at<uint8_t>(circle_around_stable_points[j]) == 0)
+                try
+								{
+                if (circle_around_stable_points[j].y < robot->visual_pos.rows && circle_around_stable_points[j].x < robot->visual_pos.cols && robot->visual_pos.at<uint8_t>(circle_around_stable_points[j]) == 0)
                     is_stable = false;
+            		}
+            		catch (cv::Exception& e)
+            		{
+            			is_stable = false;
+            		}
             }
             if (is_stable==true)
             {
@@ -521,7 +548,10 @@ float set_other_robot_pose( ModelRobot* robot)
             }
         }
     }
-
+		if (stable_points.size() == 0)
+		{
+			throw std::runtime_error("No stable point found");
+		}
     int index = -RandU(0,stable_points.size()-1);
     circle(robot->visual_pos, stable_points.at(index), 5, (255, 255, 0), 1, 8);
     Point2f pose_other_robot = to_stage_coordinate(stable_points.at(index), Point2f(robot->map.cols, robot->map.rows));
@@ -579,8 +609,14 @@ void init_robot( ModelRobot* robot, std::string r_name, std::string r_number)
 	robot->laser->AddCallback( Model::CB_UPDATE, (model_callback_t)stgLaserCB, robot);
 	robot->laser->Subscribe();
 
-    set_other_robot_pose(robot);
-
+	try
+	{
+  	set_other_robot_pose(robot);
+	}
+	catch (std::runtime_error& e)
+	{
+		ROS_ERROR("couldnt set the other robot pose");
+	}
 	Model *floorplan = robot->pos->GetWorld()->GetModel("blank");
 	ROS_INFO("adding node %s_%s", r_name.c_str(), r_number.c_str());
 }
